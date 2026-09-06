@@ -8,41 +8,6 @@ st.set_page_config(
     page_title="Grit Tracker", page_icon="⚡", layout="centered"
 )
 
-# --- İOS TARZI KART VE BUTON STİLLERİ ---
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #0e1117;
-    }
-    
-    /* Streamlit'in kendi buton alanını gizle veya sıfırla, çünkü HTML içinde özel buton üreteceğiz */
-    .row-widget.stButton {
-        display: inline-block;
-        margin: 0px;
-    }
-    
-    /* Su dolum animasyonu */
-    .water-bar-background {
-        background-color: rgba(255, 255, 255, 0.25);
-        border-radius: 6px;
-        height: 6px;
-        width: 100%;
-        margin-top: 8px;
-        overflow: hidden;
-    }
-    
-    .water-bar-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%);
-        border-radius: 6px;
-        transition: width 0.3s ease;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # --- VERİ DOSYASI YÖNETİMİ ---
 VERI_DOSYASI = "veri.csv"
 
@@ -115,6 +80,25 @@ def veri_guncelle(kolon, deger):
   verileri_kaydet(df)
 
 
+# --- BUTON TIKLAMA (QUERY PARAMS) YÖNETİMİ ---
+if "action_toggle" in st.query_params:
+  h_adi = st.query_params["action_toggle"]
+  if h_adi in df.columns:
+    mev = df.loc[df["Tarih"] == str_bugun, h_adi].values[0]
+    yeni = 0.0 if mev > 0 else 1.0
+    veri_guncelle(h_adi, yeni)
+  st.query_params.clear()
+  st.rerun()
+
+if "action_inc" in st.query_params:
+  h_adi = st.query_params["action_inc"]
+  if h_adi in df.columns:
+    mev = df.loc[df["Tarih"] == str_bugun, h_adi].values[0]
+    artis = 0.5 if h_adi == "Su Tüketimi" else 1.0
+    veri_guncelle(h_adi, mev + artis)
+  st.query_params.clear()
+  st.rerun()
+
 # --- ÜST MENÜ / SEKMELER ---
 tab_gunluk, tab_hedef_yonetimi, tab_haftalik, tab_aylik, tab_yillik = st.tabs(
     [
@@ -148,58 +132,46 @@ with tab_gunluk:
     if pd.isna(mevcut_deger):
       mevcut_deger = 0.0
 
-    # Tıklama kontrolü için Streamlit butonunu kullanıyoruz ancak görünümünü tamamen gizleyip
-    # iOS tarzı şık yapıyı arkada çalıştırıyoruz.
-    col_icerik, col_buton = st.columns([10, 1])
-
-    # Alt alta binmeyi önlemek ve tek parça baloncuk yaratmak için HTML/CSS yapı:
-    alt_metin = (
-        f"Her gün, {mevcut_deger}/{hedef_deger} {birim_etiketi}"
-        if tip != "Onay (Tik)"
-        else ("Her gün, Tamamlandı" if mevcut_deger > 0 else "Her gün, 0/1")
-    )
+    if tip == "Onay (Tik)":
+      tamamlandi = mevcut_deger > 0
+      durum_metni = "Her gün, Tamamlandı" if tamamlandi else "Her gün, 0/1"
+      buton_sembol = "✓" if tamamlandi else "+"
+      param_adi = "action_toggle"
+    else:
+      durum_metni = f"Her gün, {mevcut_deger:g}/{hedef_deger:g} {birim_etiketi}"
+      buton_sembol = "+"
+      param_adi = "action_inc"
 
     su_cubugu_html = ""
     if hedef_adi == "Su Tüketimi":
       yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
       su_cubugu_html = f"""
-            <div class="water-bar-background">
-                <div class="water-bar-fill" style="width: {yuzde}%;"></div>
+            <div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;">
+                <div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div>
             </div>
             """
 
-    # Baloncuğun tam içerisinden HTML çizimi
+    # iOS tarzı tek parça kutu: emoji, yazılar ve sağdaki buton tamamen içeride
     st.markdown(
         f"""
-        <div style="background-color: {renk}; padding: 14px 18px; border-radius: 20px; color: white; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 14px; width: 100%;">
-                <span style="font-size: 26px;">{emoji}</span>
+        <div style="background-color: {renk}; padding: 14px 18px; border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 14px; flex-grow: 1; overflow: hidden;">
+                <span style="font-size: 28px; flex-shrink: 0;">{emoji}</span>
                 <div style="display: flex; flex-direction: column; width: 100%;">
-                    <div style="font-size: 16px; font-weight: 600; color: white;">{hedef_adi}</div>
-                    <div style="font-size: 12px; opacity: 0.8; color: white; margin-top: 2px;">{alt_metin}</div>
+                    <div style="font-size: 16px; font-weight: 600; color: white; line-height: 1.2;">{hedef_adi}</div>
+                    <div style="font-size: 12px; opacity: 0.85; color: white; margin-top: 3px;">{durum_metni}</div>
                     {su_cubugu_html}
                 </div>
+            </div>
+            <div style="margin-left: 14px; flex-shrink: 0;">
+                <a href="?{param_adi}={hedef_adi}" target="_self" style="width: 42px; height: 42px; border-radius: 50%; background-color: rgba(255, 255, 255, 0.25); border: 2px solid rgba(255, 255, 255, 0.6); display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
+                    {buton_sembol}
+                </a>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-
-    # Buton yerleşimi için Streamlit sütununu hemen altına gizli entegre ediyoruz
-    # (Streamlit yapısı gereği butonlar tam bu noktada satırin sağ hizasına denk gelecek şekilde konumlandırılacak)
-    with col_buton:
-      if tip == "Onay (Tik)":
-        buton_etiketi = "✓" if mevcut_deger > 0 else "+"
-        if st.button(buton_etiketi, key=f"btn_{hedef_adi}"):
-          yeni_val = 0.0 if mevcut_deger > 0 else 1.0
-          veri_guncelle(hedef_adi, yeni_val)
-          st.rerun()
-      else:
-        artis_miktari = 0.5 if birim_etiketi == "L" else 1.0
-        if st.button("+", key=f"btn_inc_{hedef_adi}"):
-          yeni_val = mevcut_deger + artis_miktari
-          veri_guncelle(hedef_adi, yeni_val)
-          st.rerun()
 
   # Uyku Takibi Kartı
   mevcut_uyku = int(aktif_satir["Uyku"]) if "Uyku" in aktif_satir else 7
@@ -300,7 +272,7 @@ with tab_haftalik:
     st.dataframe(df_w)
 
 # ==========================================
-# 4. SEKME: AYLIK İSTATİSTİKLER
+# 4. SEKME: AYLİK İSTATİSTİKLER
 # ==========================================
 with tab_aylik:
   st.header("Aylık Rapor")
@@ -310,7 +282,7 @@ with tab_aylik:
     st.metric("😴 Ortalama Uyku Süresi", f"{ortalama_uyku:.1f} Saat")
 
 # ==========================================
-# 5. SEKME: YILLIK İSTATİSTİKLER
+# 5. SEKME: YILLİK İSTATİSTİKLER
 # ==========================================
 with tab_yillik:
   st.header("Yıllık Büyük Resim")

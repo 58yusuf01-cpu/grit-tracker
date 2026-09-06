@@ -16,16 +16,27 @@ st.markdown(
         background-color: #0e1117;
     }
     
-    /* Hedef Satır Kartı */
-    .goal-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 18px;
-        border-radius: 20px;
-        color: white;
-        margin-bottom: 12px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    /* Streamlit butonlarını iOS tarzı yuvarlak butonlara dönüştürme */
+    .stButton button {
+        border-radius: 50% !important;
+        width: 42px !important;
+        height: 42px !important;
+        padding: 0px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background-color: rgba(255, 255, 255, 0.25) !important;
+        color: white !important;
+        border: 2px solid rgba(255, 255, 255, 0.5) !important;
+        font-weight: bold !important;
+        font-size: 18px !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    .stButton button:hover {
+        background-color: rgba(255, 255, 255, 0.4) !important;
+        border-color: white !important;
     }
 
     /* Su dolum animasyonu */
@@ -133,7 +144,7 @@ tab_gunluk, tab_hedef_yonetimi, tab_haftalik, tab_aylik, tab_yillik = st.tabs(
 )
 
 # ==========================================
-# 1. SEKME: BUGÜN (Anlık Dokunmatik Kartlar)
+# 1. SEKME: BUGÜN
 # ==========================================
 with tab_gunluk:
   st.header("Günlük Hedefler")
@@ -154,53 +165,41 @@ with tab_gunluk:
     if pd.isna(mevcut_deger):
       mevcut_deger = 0.0
 
-    # Kart arayüzü
+    # Kartı tamamen renkli kapsayıcı içinde tutmak için stil uyguluyoruz
     st.markdown(
         f"""
-        <div style="background-color: {renk};" class="goal-card">
-            <div style="display: flex; flex-direction: column; flex-grow: 1;">
-                <div style="font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: white;">
-                    <span>{emoji}</span> <span>{hedef_adi}</span>
-                </div>
+        <div style="background-color: {renk}; padding: 14px 18px; border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
         """,
         unsafe_allow_html=True,
     )
 
-    # Sağdaki yuvarlak buton yerleşimi için sütun yapısı
     col_sol, col_sag = st.columns([5, 1])
 
     with col_sol:
+      st.markdown(
+          f"""
+            <div style="font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: white; margin-bottom: 4px;">
+                <span>{emoji}</span> <span>{hedef_adi}</span>
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
       if tip == "Onay (Tik)":
         durum_metni = "Tamamlandı" if mevcut_deger > 0 else "Her gün"
         st.markdown(
-            f"<div style='font-size: 12px; opacity: 0.85; color: white; margin-top: 4px;'>{durum_metni}</div>",
+            f"<div style='font-size: 12px; opacity: 0.85; color: white;'>{durum_metni}</div>",
             unsafe_allow_html=True,
         )
-        st.markdown("</div></div>", unsafe_allow_html=True)
-
-        with col_sag:
-          # Resimdeki gibi sağda yuvarlak buton (Tik veya Artı)
-          buton_etiketi = "✓" if mevcut_deger > 0 else "+"
-          if st.button(
-              buton_etiketi,
-              key=f"btn_{hedef_adi}",
-              help="Tamamlamak için dokun",
-          ):
-            yeni_val = 0.0 if mevcut_deger > 0 else 1.0
-            veri_guncelle(hedef_adi, yeni_val)
-            st.rerun()
-
       else:
-        # Sayısal / Miktar bazlı hedefler (Örn: Su tüketimi)
         st.markdown(
             f"""
-            <div style='font-size: 12px; opacity: 0.9; color: white; margin-top: 2px;'>
+            <div style='font-size: 12px; opacity: 0.9; color: white;'>
                 Hedef: {hedef_deger} {birim_etiketi} | Alınan: {mevcut_deger} {birim_etiketi}
             </div>
             """,
             unsafe_allow_html=True,
         )
-
         if hedef_adi == "Su Tüketimi":
           yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
           st.markdown(
@@ -212,26 +211,35 @@ with tab_gunluk:
               unsafe_allow_html=True,
           )
 
-        st.markdown("</div></div>", unsafe_allow_html=True)
+    with col_sag:
+      st.markdown(
+          "<div style='display: flex; align-items: center; justify-content:"
+          " center; height: 100%;'>",
+          unsafe_allow_html=True,
+      )
+      if tip == "Onay (Tik)":
+        buton_etiketi = "✓" if mevcut_deger > 0 else ""
+        if st.button(buton_etiketi, key=f"btn_{hedef_adi}"):
+          yeni_val = 0.0 if mevcut_deger > 0 else 1.0
+          veri_guncelle(hedef_adi, yeni_val)
+          st.rerun()
+      else:
+        # Sayısal hedefler için dokundukça artıran buton (Su için +0.5L, diğerleri için +1)
+        artis_miktari = 0.5 if birim_etiketi == "L" else 1.0
+        if st.button("+", key=f"btn_inc_{hedef_adi}"):
+          yeni_val = mevcut_deger + artis_miktari
+          veri_guncelle(hedef_adi, yeni_val)
+          st.rerun()
+      st.markdown("</div>", unsafe_allow_html=True)
 
-        with col_sag:
-          # Her dokunuşta miktar artırıcı buton (Örn: Su için +0.5L, diğerleri için +1)
-          artis_miktari = 0.5 if birim_etiketi == "L" else 1.0
-          if st.button("+", key=f"btn_inc_{hedef_adi}", help="Miktar ekle"):
-            yeni_val = mevcut_deger + artis_miktari
-            veri_guncelle(hedef_adi, yeni_val)
-            st.rerun()
-
-    st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)  # Renkli ana kapsayıcı kapanış
 
   # Uyku Takibi Kartı
   mevcut_uyku = int(aktif_satir["Uyku"]) if "Uyku" in aktif_satir else 7
   st.markdown(
       """
-      <div style="background-color: #37474F;" class="goal-card">
-          <div style="display: flex; flex-direction: column; flex-grow: 1;">
-              <div style="font-size: 16px; font-weight: 600; color: white;">😴 Uyku Süresi ({aktif_uyku} Saat)</div>
-          </div>
+      <div style="background-color: #37474F; padding: 14px 18px; border-radius: 20px; color: white; margin-bottom: 12px;">
+          <div style="font-size: 16px; font-weight: 600; color: white; margin-bottom: 8px;">😴 Uyku Süresi</div>
       </div>
       """,
       unsafe_allow_html=True,
@@ -283,7 +291,7 @@ with tab_hedef_yonetimi:
       if yeni_ad not in st.session_state["custom_goals"]:
         st.session_state["custom_goals"][yeni_ad] = {
             "emoji": yeni_emoji,
-            "renk": yeni_renk,
+            "renk": yenirenk if "yenirenk" in locals() else yeni_renk,
             "tip": yeni_tip,
             "hedef_deger": yeni_hedef_deger,
             "birim": yeni_birim,

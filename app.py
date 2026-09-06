@@ -18,39 +18,45 @@ st.markdown(
     }
     
     /* iOS tarzı yumuşatılmış, büyük ve renkli kart kapsayıcıları */
-    .custom-card {
-        padding: 18px 22px;
+    .goal-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
         border-radius: 20px;
         color: white;
-        margin-bottom: 14px;
+        margin-bottom: 12px;
         box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    .goal-info {
         display: flex;
         flex-direction: column;
+        flex-grow: 1;
+        margin-right: 15px;
     }
     
     /* Su dolum animasyonu (Soldan sağa dolan sıvı efekti) */
     .water-bar-background {
-        background-color: rgba(255, 255, 255, 0.25);
-        border-radius: 12px;
-        height: 14px;
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        height: 10px;
         width: 100%;
-        margin-top: 10px;
+        margin-top: 8px;
         overflow: hidden;
         position: relative;
     }
     
     .water-bar-fill {
         height: 100%;
-        background: linear-gradient(90deg, #00c6ff 0%, #0072ff 100%);
-        border-radius: 12px;
-        transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%);
+        border-radius: 10px;
+        transition: width 0.4s ease;
     }
-    
-    /* Form elemanlarını kart tasarıma entegre etme */
-    div.stForm {
-        background: transparent;
-        border: none;
-        padding: 0;
+
+    /* Streamlit widget boşluklarını ve form elementlerini optimize etme */
+    div[data-testid="stCheckbox"] label span {
+        color: white !important;
     }
     </style>
     """,
@@ -75,7 +81,7 @@ def verileri_kaydet(df):
 if "data" not in st.session_state:
   st.session_state["data"] = verileri_yukle()
 
-# Başlangıç Hedefleri (Kreatin kaldırıldı, Su hedefi 3L olarak güncellendi)
+# Başlangıç Hedefleri
 if "custom_goals" not in st.session_state:
   st.session_state["custom_goals"] = {
       "Su Tüketimi": {
@@ -107,6 +113,27 @@ if "custom_goals" not in st.session_state:
   }
 
 bugun = datetime.date.today()
+str_bugun = str(bugun)
+
+# Otomatik veri çerçevesi hazırlığı (Bugünün satırı yoksa oluştur)
+df = st.session_state["data"]
+df["Tarih"] = df["Tarih"].astype(str)
+
+if df[df["Tarih"] == str_bugun].empty:
+  yeni_satir = {"Tarih": str_bugun, "Uyku": 7}
+  for h in st.session_state["custom_goals"].keys():
+    yeni_satir[h] = 0
+  df = pd.concat([df, pd.DataFrame([yeni_satir])], ignore_index=True)
+  st.session_state["data"] = df
+  verileri_kaydet(df)
+
+
+def veri_guncelle(kolon, deger):
+  global df
+  df.loc[df["Tarih"] == str_bugun, kolon] = deger
+  st.session_state["data"] = df
+  verileri_kaydet(df)
+
 
 # --- ÜST MENÜ / SEKMELER ---
 tab_gunluk, tab_hedef_yonetimi, tab_haftalik, tab_aylik, tab_yillik = st.tabs(
@@ -120,100 +147,149 @@ tab_gunluk, tab_hedef_yonetimi, tab_haftalik, tab_aylik, tab_yillik = st.tabs(
 )
 
 # ==========================================
-# 1. SEKME: BUGÜN
+# 1. SEKME: BUGÜN (Anlık Kayıt ve iOS Tarzı Kartlar)
 # ==========================================
 with tab_gunluk:
   st.header("Günlük Hedefler")
   st.caption(f"Tarih: {bugun.strftime('%d.%m.%Y')}")
 
-  with st.form("gunluk_form"):
-    girilen_veriler = {}
+  # Mevcut bugünün verilerini çek
+  aktif_satir = df[df["Tarih"] == str_bugun].iloc[0]
 
-    for hedef_adi, detay in st.session_state["custom_goals"].items():
-      emoji = detay["emoji"]
-      renk = detay["renk"]
-      tip = detay["tip"]
-      hedef_deger = detay["hedef_deger"]
+  for hedef_adi, detay in st.session_state["custom_goals"].items():
+    emoji = detay["emoji"]
+    renk = detay["renk"]
+    tip = detay["tip"]
+    hedef_deger = detay["hedef_deger"]
 
-      # Her hedef için iOS tarzı renkli ve yumuşatılmış çerçeve kartı
-      st.markdown(
-          f"""
-            <div class="custom-card" style="background-color: {renk};">
-                <div style="font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+    # Kart Başlangıcı (iOS Tarzı Yuvarlatılmış Arka Plan)
+    st.markdown(
+        f"""
+        <div style="background-color: {renk};" class="goal-row">
+            <div class="goal-info">
+                <div style="font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: white;">
                     <span>{emoji}</span> <span>{hedef_adi}</span>
                 </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Hedef Tipine Göre İçerik ve Anlık Kayıt Tetikleyicileri
+    mevcut_deger = (
+        aktif_satir[hedef_adi] if hedef_adi in aktif_satir else 0.0
+    )
+    if pd.isna(mevcut_deger):
+      mevcut_deger = 0.0
+
+    if tip == "Onay (Tik)":
+      # Sağ tarafa denk gelecek şekilde buton/checkbox mantığı
+      st.markdown("</div>", unsafe_allow_html=True)  # goal-info kapat
+
+      col_sol, col_sag = st.columns([4, 1])
+      with col_sol:
+        st.markdown(
+            f"<div style='font-size: 12px; opacity: 0.85; color: white;'>Her gün</div>",
+            unsafe_allow_html=True,
+        )
+      with col_sag:
+        yeni_durum = st.checkbox(
+            "Tik",
+            value=bool(mevcut_deger > 0),
+            key=f"chk_{hedef_adi}",
+            label_visibility="collapsed",
+        )
+        if yeni_durum != bool(mevcut_deger > 0):
+          veri_guncelle(hedef_adi, 1.0 if yeni_durum else 0.0)
+          st.rerun()
+
+      st.markdown("</div>", unsafe_allow_html=True)  # goal-row kapat
+
+    else:
+      birim_etiketi = detay.get("birim", "")
+      if hedef_adi == "Su Tüketimi":
+        st.markdown(
+            f"""
+            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px; color: white;">
+                Hedef: {hedef_deger} {birim_etiketi} | Alınan: {mevcut_deger} {birim_etiketi}
+            </div>
             </div>
             """,
-          unsafe_allow_html=True,
-      )
+            unsafe_allow_html=True,
+        )
 
-      if tip == "Onay (Tik)":
-        girilen_veriler[hedef_adi] = st.checkbox(
-            f"{hedef_adi} Tamamlandı", value=False, key=f"chk_{hedef_adi}"
+        # Su miktarını artıran/değiştiren sayısal girdi
+        yeni_su = st.number_input(
+            f"Su Miktarı ({birim_etiketi})",
+            min_value=0.0,
+            max_value=10.0,
+            step=0.25,
+            value=float(mevcut_deger),
+            key=f"num_{hedef_adi}",
+            label_visibility="collapsed",
+        )
+        if yeni_su != float(mevcut_deger):
+          veri_guncelle(hedef_adi, yeni_su)
+          st.rerun()
+
+        # Soldan sağa dolan sıvı animasyon barı
+        yuzde = min(int((yeni_su / hedef_deger) * 100), 100)
+        st.markdown(
+            f"""
+            <div class="water-bar-background">
+                <div class="water-bar-fill" style="width: {yuzde}%;"></div>
+            </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
       else:
-        birim_etiketi = detay.get("birim", "")
-        # Su tüketimi özelinde soldan sağa dolan sıvı animasyonlu bar gösterimi
-        if hedef_adi == "Su Tüketimi":
-          su_degeri = st.number_input(
-              f"Miktar ({birim_etiketi})",
-              min_value=0.0,
-              max_value=10.0,
-              step=0.25,
-              value=0.0,
-              key=f"num_{hedef_adi}",
-          )
-          girilen_veriler[hedef_adi] = su_degeri
+        st.markdown(
+            f"""
+            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px; color: white;">
+                Hedef: {hedef_deger} {birim_etiketi}
+            </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        yeni_miktar = st.number_input(
+            f"Miktar ({birim_etiketi})",
+            min_value=0.0,
+            step=1.0,
+            value=float(mevcut_deger),
+            key=f"num_{hedef_adi}",
+            label_visibility="collapsed",
+        )
+        if yeni_miktar != float(mevcut_deger):
+          veri_guncelle(hedef_adi, yeni_miktar)
+          st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-          # Yüzde hesaplama (3 Litre hedefe göre)
-          yuzde = min(int((su_degeri / hedef_deger) * 100), 100)
-          st.markdown(
-              f"""
-                <div style="font-size: 13px; margin-top: -5px; margin-bottom: 5px; opacity: 0.9;">
-                    Hedef: {hedef_deger} {birim_etiketi} | Alınan: {su_degeri} {birim_etiketi} (%{yuzde})
-                </div>
-                <div class="water-bar-background">
-                    <div class="water-bar-fill" style="width: {yuzde}%;"></div>
-                </div>
-                """,
-              unsafe_allow_html=True,
-          )
-        else:
-          girilen_veriler[hedef_adi] = st.number_input(
-              f"Miktar ({birim_etiketi})",
-              min_value=0.0,
-              step=1.0,
-              value=0.0,
-              key=f"num_{hedef_adi}",
-          )
+    st.markdown("<div style='margin-bottom: 4px;'></div>", unsafe_allow_html=True)
 
-      st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-
-    st.subheader("😴 Uyku Takibi")
-    uyku_suresi = st.slider("Uyku Süresi (Saat)", 0, 12, 7)
-
-    kaydet_buton = st.form_submit_button("Bugünü Kaydet / Güncelle")
-
-    if kaydet_buton:
-      yeni_veri = {"Tarih": str(bugun), "Uyku": uyku_suresi}
-      yeni_veri.update(girilen_veriler)
-
-      df = st.session_state["data"]
-
-      for col in yeni_veri.keys():
-        if col not in df.columns:
-          df[col] = 0
-
-      df["Tarih"] = df["Tarih"].astype(str)
-      if not df[df["Tarih"] == str(bugun)].empty:
-        for col, val in yeni_veri.items():
-          df.loc[df["Tarih"] == str(bugun), col] = val
-      else:
-        df = pd.concat([df, pd.DataFrame([yeni_veri])], ignore_index=True)
-
-      st.session_state["data"] = df
-      verileri_kaydet(df)
-      st.success("Veriler başarıyla kaydedildi! 💪")
+  # Uyku Takibi Kartı
+  mevcut_uyku = int(aktif_satir["Uyku"]) if "Uyku" in aktif_satir else 7
+  st.markdown(
+      """
+      <div style="background-color: #37474F;" class="goal-row">
+          <div class="goal-info">
+              <div style="font-size: 17px; font-weight: 600; color: white;">😴 Uyku Süresi (Saat)</div>
+          </div>
+      </div>
+      """,
+      unsafe_allow_html=True,
+  )
+  yeni_uyku = st.slider(
+      "Uyku",
+      0,
+      12,
+      mevcut_uyku,
+      key="slider_uyku",
+      label_visibility="collapsed",
+  )
+  if yeni_uyku != mevcut_uyku:
+    veri_guncelle("Uyku", yeni_uyku)
+    st.rerun()
 
 # ==========================================
 # 2. SEKME: HEDEF YÖNETİMİ
@@ -255,6 +331,12 @@ with tab_hedef_yonetimi:
             "hedef_deger": yeni_hedef_deger,
             "birim": yeni_birim,
         }
+        # DataFrame sütununa da ekle
+        if yeni_ad not in df.columns:
+          df[yeni_ad] = 0.0
+          st.session_state["data"] = df
+          verileri_kaydet(df)
+
         st.success(f"'{yeni_emoji} {yeni_ad}' başarıyla eklendi!")
         st.rerun()
       else:
@@ -279,22 +361,21 @@ with tab_hedef_yonetimi:
 # ==========================================
 with tab_haftalik:
   st.header("Haftalık İlerleme")
-  df = st.session_state["data"]
-
-  if df.empty or len(df.columns) <= 2:
+  df_w = st.session_state["data"]
+  if df_w.empty or len(df_w.columns) <= 2:
     st.info("Henüz yeterli veri girilmedi.")
   else:
     st.subheader("Kayıtlı Veri Tablosu")
-    st.dataframe(df)
+    st.dataframe(df_w)
 
 # ==========================================
 # 4. SEKME: AYLIK İSTATİSTİKLER
 # ==========================================
 with tab_aylik:
   st.header("Aylık Rapor")
-  df = st.session_state["data"]
-  if not df.empty and "Uyku" in df.columns:
-    ortalama_uyku = df["Uyku"].mean()
+  df_m = st.session_state["data"]
+  if not df_m.empty and "Uyku" in df_m.columns:
+    ortalama_uyku = df_m["Uyku"].mean()
     st.metric("😴 Ortalama Uyku Süresi", f"{ortalama_uyku:.1f} Saat")
 
 # ==========================================

@@ -1,6 +1,5 @@
 import datetime
 import os
-import textwrap
 import pandas as pd
 import streamlit as st
 
@@ -121,10 +120,10 @@ with tab_gunluk:
   aktif_satir = df[df["Tarih"] == str_bugun].iloc[0]
 
   for hedef_adi, detay in st.session_state["custom_goals"].items():
-    emoji = detay["emoji"]
-    renk = detay["renk"]
-    tip = detay["tip"]
-    hedef_deger = detay["hedef_deger"]
+    emoji = detay.get("emoji", "🎯")
+    renk = detay.get("renk", "#37474F")
+    tip = detay.get("tip", "Onay (Tik)")
+    hedef_deger = detay.get("hedef_deger", 1.0)
     birim_etiketi = detay.get("birim", "")
 
     mevcut_deger = (
@@ -139,32 +138,51 @@ with tab_gunluk:
       buton_sembol = "✓" if tamamlandi else "+"
       param_adi = "action_toggle"
     else:
-      durum_metni = f"Her gün, {mevcut_deger:g}/{hedef_deger:g} {birim_etiketi}"
+      durum_metni = (
+          f"Her gün, {mevcut_deger:g}/{hedef_deger:g} {birim_etiketi}"
+      )
       buton_sembol = "+"
       param_adi = "action_inc"
 
     su_cubugu_html = ""
-    if hedef_adi == "Su Tüketimi":
-      yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
-      su_cubugu_html = f"""<div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div></div>"""
+    if hedef_adi == "Su Tüketimi" or (
+        tip == "Miktar (Sayısal)" and birim_etiketi in ["L", "lt", "litre"]
+    ):
+      yuzde = (
+          min(int((mevcut_deger / hedef_deger) * 100), 100)
+          if hedef_deger > 0
+          else 0
+      )
+      su_cubugu_html = f'<div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div></div>'
 
-    html_kodu = textwrap.dedent(f"""
-        <div style="background-color: {renk}; padding: 14px 18px; border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 14px; flex-grow: 1; overflow: hidden;">
-                <span style="font-size: 28px; flex-shrink: 0;">{emoji}</span>
-                <div style="display: flex; flex-direction: column; width: 100%;">
-                    <div style="font-size: 16px; font-weight: 600; color: white; line-height: 1.2;">{hedef_adi}</div>
-                    <div style="font-size: 12px; opacity: 0.85; color: white; margin-top: 3px;">{durum_metni}</div>
-                    {su_cubugu_html}
-                </div>
-            </div>
-            <div style="margin-left: 14px; flex-shrink: 0;">
-                <a href="?{param_adi}={hedef_adi}" target="_self" style="width: 42px; height: 42px; border-radius: 50%; background-color: rgba(255, 255, 255, 0.25); border: 2px solid rgba(255, 255, 255, 0.6); display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
-                    {buton_sembol}
-                </a>
-            </div>
-        </div>
-        """)
+    # Tüm hedefler için standartlaştırılmış tek parça HTML şablonu (girintisiz)
+    html_kodu = (
+        f'<div style="background-color: {renk}; padding: 14px 18px;'
+        " border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0"
+        " 4px 12px rgba(0, 0, 0, 0.2); display: flex; align-items: center;"
+        ' justify-content: space-between;">'
+        '<div style="display: flex; align-items: center; gap: 14px;'
+        ' flex-grow: 1; overflow: hidden;">'
+        f'<span style="font-size: 28px; flex-shrink: 0;">{emoji}</span>'
+        '<div style="display: flex; flex-direction: column; width: 100%;">'
+        f'<div style="font-size: 16px; font-weight: 600; color: white;'
+        f' line-height: 1.2;">{hedef_adi}</div>'
+        f'<div style="font-size: 12px; opacity: 0.85; color: white;'
+        f' margin-top: 3px;">{durum_metni}</div>'
+        f"{su_cubugu_html}"
+        "</div>"
+        "</div>"
+        '<div style="margin-left: 14px; flex-shrink: 0;">'
+        f'<a href="?{param_adi}={hedef_adi}" target="_self"'
+        ' style="width: 42px; height: 42px; border-radius: 50%;'
+        ' background-color: rgba(255, 255, 255, 0.25); border: 2px solid'
+        ' rgba(255, 255, 255, 0.6); display: flex; align-items: center;'
+        ' justify-content: center; color: white; text-decoration: none;'
+        ' font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px'
+        f' rgba(0,0,0,0.15);">{buton_sembol}</a>'
+        "</div>"
+        "</div>"
+    )
 
     st.markdown(html_kodu, unsafe_allow_html=True)
 
@@ -255,7 +273,7 @@ with tab_hedef_yonetimi:
         st.error("En az bir hedef kalmak zorunda.")
 
 # ==========================================
-# 3. SEKME: HAFTALİK İSTATİSTİKLER
+# 3. SEKME: HAFTALIK İSTATİSTİKLER
 # ==========================================
 with tab_haftalik:
   st.header("Haftalık İlerleme")
@@ -267,7 +285,7 @@ with tab_haftalik:
     st.dataframe(df_w)
 
 # ==========================================
-# 4. SEKME: AYLİK İSTATİSTİKLER
+# 4. SEKME: AYLIK İSTATİSTİKLER
 # ==========================================
 with tab_aylik:
   st.header("Aylık Rapor")
@@ -277,7 +295,7 @@ with tab_aylik:
     st.metric("😴 Ortalama Uyku Süresi", f"{ortalama_uyku:.1f} Saat")
 
 # ==========================================
-# 5. SEKME: YILLİK İSTATİSTİKLER
+# 5. SEKME: YILLIK İSTATİSTİKLER
 # ==========================================
 with tab_yillik:
   st.header("Yıllık Büyük Resim")

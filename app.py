@@ -8,55 +8,41 @@ st.set_page_config(
     page_title="Grit Tracker", page_icon="⚡", layout="centered"
 )
 
-# --- ÖZEL TASARIM VE İOS TARZI KART / ANİMASYON CSS ---
+# --- İOS TARZI KART VE BUTON STİLLERİ ---
 st.markdown(
     """
     <style>
-    /* Genel arka plan ve tipografi iyileştirmeleri */
     .stApp {
         background-color: #0e1117;
     }
     
-    /* iOS tarzı yumuşatılmış, büyük ve renkli kart kapsayıcıları */
-    .goal-row {
+    /* Hedef Satır Kartı */
+    .goal-card {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 16px 20px;
+        padding: 14px 18px;
         border-radius: 20px;
         color: white;
         margin-bottom: 12px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
-    
-    .goal-info {
-        display: flex;
-        flex-direction: column;
-        flex-grow: 1;
-        margin-right: 15px;
-    }
-    
-    /* Su dolum animasyonu (Soldan sağa dolan sıvı efekti) */
+
+    /* Su dolum animasyonu */
     .water-bar-background {
         background-color: rgba(255, 255, 255, 0.3);
-        border-radius: 10px;
-        height: 10px;
+        border-radius: 8px;
+        height: 8px;
         width: 100%;
         margin-top: 8px;
         overflow: hidden;
-        position: relative;
     }
     
     .water-bar-fill {
         height: 100%;
         background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%);
-        border-radius: 10px;
-        transition: width 0.4s ease;
-    }
-
-    /* Streamlit widget boşluklarını ve form elementlerini optimize etme */
-    div[data-testid="stCheckbox"] label span {
-        color: white !important;
+        border-radius: 8px;
+        transition: width 0.3s ease;
     }
     </style>
     """,
@@ -115,14 +101,14 @@ if "custom_goals" not in st.session_state:
 bugun = datetime.date.today()
 str_bugun = str(bugun)
 
-# Otomatik veri çerçevesi hazırlığı (Bugünün satırı yoksa oluştur)
+# Otomatik veri çerçevesi hazırlığı
 df = st.session_state["data"]
 df["Tarih"] = df["Tarih"].astype(str)
 
 if df[df["Tarih"] == str_bugun].empty:
   yeni_satir = {"Tarih": str_bugun, "Uyku": 7}
   for h in st.session_state["custom_goals"].keys():
-    yeni_satir[h] = 0
+    yeni_satir[h] = 0.0
   df = pd.concat([df, pd.DataFrame([yeni_satir])], ignore_index=True)
   st.session_state["data"] = df
   verileri_kaydet(df)
@@ -147,13 +133,12 @@ tab_gunluk, tab_hedef_yonetimi, tab_haftalik, tab_aylik, tab_yillik = st.tabs(
 )
 
 # ==========================================
-# 1. SEKME: BUGÜN (Anlık Kayıt ve iOS Tarzı Kartlar)
+# 1. SEKME: BUGÜN (Anlık Dokunmatik Kartlar)
 # ==========================================
 with tab_gunluk:
   st.header("Günlük Hedefler")
   st.caption(f"Tarih: {bugun.strftime('%d.%m.%Y')}")
 
-  # Mevcut bugünün verilerini çek
   aktif_satir = df[df["Tarih"] == str_bugun].iloc[0]
 
   for hedef_adi, detay in st.session_state["custom_goals"].items():
@@ -161,119 +146,91 @@ with tab_gunluk:
     renk = detay["renk"]
     tip = detay["tip"]
     hedef_deger = detay["hedef_deger"]
+    birim_etiketi = detay.get("birim", "")
 
-    # Kart Başlangıcı (iOS Tarzı Yuvarlatılmış Arka Plan)
-    st.markdown(
-        f"""
-        <div style="background-color: {renk};" class="goal-row">
-            <div class="goal-info">
-                <div style="font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: white;">
-                    <span>{emoji}</span> <span>{hedef_adi}</span>
-                </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Hedef Tipine Göre İçerik ve Anlık Kayıt Tetikleyicileri
     mevcut_deger = (
         aktif_satir[hedef_adi] if hedef_adi in aktif_satir else 0.0
     )
     if pd.isna(mevcut_deger):
       mevcut_deger = 0.0
 
-    if tip == "Onay (Tik)":
-      # Sağ tarafa denk gelecek şekilde buton/checkbox mantığı
-      st.markdown("</div>", unsafe_allow_html=True)  # goal-info kapat
+    # Kart arayüzü
+    st.markdown(
+        f"""
+        <div style="background-color: {renk};" class="goal-card">
+            <div style="display: flex; flex-direction: column; flex-grow: 1;">
+                <div style="font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: white;">
+                    <span>{emoji}</span> <span>{hedef_adi}</span>
+                </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-      col_sol, col_sag = st.columns([4, 1])
-      with col_sol:
+    # Sağdaki yuvarlak buton yerleşimi için sütun yapısı
+    col_sol, col_sag = st.columns([5, 1])
+
+    with col_sol:
+      if tip == "Onay (Tik)":
+        durum_metni = "Tamamlandı" if mevcut_deger > 0 else "Her gün"
         st.markdown(
-            f"<div style='font-size: 12px; opacity: 0.85; color: white;'>Her gün</div>",
+            f"<div style='font-size: 12px; opacity: 0.85; color: white; margin-top: 4px;'>{durum_metni}</div>",
             unsafe_allow_html=True,
         )
-      with col_sag:
-        yeni_durum = st.checkbox(
-            "Tik",
-            value=bool(mevcut_deger > 0),
-            key=f"chk_{hedef_adi}",
-            label_visibility="collapsed",
-        )
-        if yeni_durum != bool(mevcut_deger > 0):
-          veri_guncelle(hedef_adi, 1.0 if yeni_durum else 0.0)
-          st.rerun()
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
-      st.markdown("</div>", unsafe_allow_html=True)  # goal-row kapat
+        with col_sag:
+          # Resimdeki gibi sağda yuvarlak buton (Tik veya Artı)
+          buton_etiketi = "✓" if mevcut_deger > 0 else "+"
+          if st.button(
+              buton_etiketi,
+              key=f"btn_{hedef_adi}",
+              help="Tamamlamak için dokun",
+          ):
+            yeni_val = 0.0 if mevcut_deger > 0 else 1.0
+            veri_guncelle(hedef_adi, yeni_val)
+            st.rerun()
 
-    else:
-      birim_etiketi = detay.get("birim", "")
-      if hedef_adi == "Su Tüketimi":
+      else:
+        # Sayısal / Miktar bazlı hedefler (Örn: Su tüketimi)
         st.markdown(
             f"""
-            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px; color: white;">
+            <div style='font-size: 12px; opacity: 0.9; color: white; margin-top: 2px;'>
                 Hedef: {hedef_deger} {birim_etiketi} | Alınan: {mevcut_deger} {birim_etiketi}
             </div>
-            </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # Su miktarını artıran/değiştiren sayısal girdi
-        yeni_su = st.number_input(
-            f"Su Miktarı ({birim_etiketi})",
-            min_value=0.0,
-            max_value=10.0,
-            step=0.25,
-            value=float(mevcut_deger),
-            key=f"num_{hedef_adi}",
-            label_visibility="collapsed",
-        )
-        if yeni_su != float(mevcut_deger):
-          veri_guncelle(hedef_adi, yeni_su)
-          st.rerun()
+        if hedef_adi == "Su Tüketimi":
+          yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
+          st.markdown(
+              f"""
+              <div class="water-bar-background">
+                  <div class="water-bar-fill" style="width: {yuzde}%;"></div>
+              </div>
+              """,
+              unsafe_allow_html=True,
+          )
 
-        # Soldan sağa dolan sıvı animasyon barı
-        yuzde = min(int((yeni_su / hedef_deger) * 100), 100)
-        st.markdown(
-            f"""
-            <div class="water-bar-background">
-                <div class="water-bar-fill" style="width: {yuzde}%;"></div>
-            </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-      else:
-        st.markdown(
-            f"""
-            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px; color: white;">
-                Hedef: {hedef_deger} {birim_etiketi}
-            </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        yeni_miktar = st.number_input(
-            f"Miktar ({birim_etiketi})",
-            min_value=0.0,
-            step=1.0,
-            value=float(mevcut_deger),
-            key=f"num_{hedef_adi}",
-            label_visibility="collapsed",
-        )
-        if yeni_miktar != float(mevcut_deger):
-          veri_guncelle(hedef_adi, yeni_miktar)
-          st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='margin-bottom: 4px;'></div>", unsafe_allow_html=True)
+        with col_sag:
+          # Her dokunuşta miktar artırıcı buton (Örn: Su için +0.5L, diğerleri için +1)
+          artis_miktari = 0.5 if birim_etiketi == "L" else 1.0
+          if st.button("+", key=f"btn_inc_{hedef_adi}", help="Miktar ekle"):
+            yeni_val = mevcut_deger + artis_miktari
+            veri_guncelle(hedef_adi, yeni_val)
+            st.rerun()
+
+    st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
 
   # Uyku Takibi Kartı
   mevcut_uyku = int(aktif_satir["Uyku"]) if "Uyku" in aktif_satir else 7
   st.markdown(
       """
-      <div style="background-color: #37474F;" class="goal-row">
-          <div class="goal-info">
-              <div style="font-size: 17px; font-weight: 600; color: white;">😴 Uyku Süresi (Saat)</div>
+      <div style="background-color: #37474F;" class="goal-card">
+          <div style="display: flex; flex-direction: column; flex-grow: 1;">
+              <div style="font-size: 16px; font-weight: 600; color: white;">😴 Uyku Süresi ({aktif_uyku} Saat)</div>
           </div>
       </div>
       """,
@@ -331,7 +288,6 @@ with tab_hedef_yonetimi:
             "hedef_deger": yeni_hedef_deger,
             "birim": yeni_birim,
         }
-        # DataFrame sütununa da ekle
         if yeni_ad not in df.columns:
           df[yeni_ad] = 0.0
           st.session_state["data"] = df

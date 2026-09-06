@@ -1,5 +1,6 @@
 import datetime
 import os
+import textwrap
 import pandas as pd
 import streamlit as st
 
@@ -145,15 +146,9 @@ with tab_gunluk:
     su_cubugu_html = ""
     if hedef_adi == "Su Tüketimi":
       yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
-      su_cubugu_html = f"""
-            <div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;">
-                <div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div>
-            </div>
-            """
+      su_cubugu_html = f"""<div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div></div>"""
 
-    # iOS tarzı tek parça kutu: emoji, yazılar ve sağdaki buton tamamen içeride
-    st.markdown(
-        f"""
+    html_kodu = textwrap.dedent(f"""
         <div style="background-color: {renk}; padding: 14px 18px; border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 14px; flex-grow: 1; overflow: hidden;">
                 <span style="font-size: 28px; flex-shrink: 0;">{emoji}</span>
@@ -169,9 +164,9 @@ with tab_gunluk:
                 </a>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
+
+    st.markdown(html_kodu, unsafe_allow_html=True)
 
   # Uyku Takibi Kartı
   mevcut_uyku = int(aktif_satir["Uyku"]) if "Uyku" in aktif_satir else 7

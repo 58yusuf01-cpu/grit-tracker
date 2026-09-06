@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import pandas as pd
 import streamlit as st
@@ -8,8 +9,54 @@ st.set_page_config(
     page_title="Grit Tracker", page_icon="⚡", layout="centered"
 )
 
-# --- VERİ DOSYASI YÖNETİMİ ---
+# --- DOSYA YÖNETİMİ ---
 VERI_DOSYASI = "veri.csv"
+HEDEF_DOSYASI = "hedefler_ayar.json"
+
+# Varsayılan Hedefler
+DEFAULT_GOALS = {
+    "Su Tüketimi": {
+        "emoji": "💧",
+        "renk": "#374151",
+        "tip": "Miktar (Sayısal)",
+        "hedef_deger": 3.0,
+        "birim": "L",
+    },
+    "Python / Yapay Zeka": {
+        "emoji": "💻",
+        "renk": "#2E7D32",
+        "tip": "Onay (Tik)",
+        "hedef_deger": 1.0,
+    },
+    "Antrenman": {
+        "emoji": "🏋️",
+        "renk": "#EF6C00",
+        "tip": "Onay (Tik)",
+        "hedef_deger": 1.0,
+    },
+    "Kitap Okuma": {
+        "emoji": "📖",
+        "renk": "#C62828",
+        "tip": "Miktar (Sayısal)",
+        "hedef_deger": 30.0,
+        "birim": "sayfa",
+    },
+}
+
+
+def hedefleri_yukle():
+  if os.path.exists(HEDEF_DOSYASI):
+    try:
+      with open(HEDEF_DOSYASI, "r", encoding="utf-8") as f:
+        return json.load(f)
+    except:
+      return DEFAULT_GOALS
+  return DEFAULT_GOALS
+
+
+def hedefleri_kaydet(hedefler):
+  with open(HEDEF_DOSYASI, "w", encoding="utf-8") as f:
+    json.dump(hedefler, f, ensure_ascii=False, indent=4)
 
 
 def verileri_yukle():
@@ -26,43 +73,20 @@ def verileri_kaydet(df):
 if "data" not in st.session_state:
   st.session_state["data"] = verileri_yukle()
 
-# Başlangıç Hedefleri
 if "custom_goals" not in st.session_state:
-  st.session_state["custom_goals"] = {
-      "Su Tüketimi": {
-          "emoji": "💧",
-          "renk": "#374151",
-          "tip": "Miktar (Sayısal)",
-          "hedef_deger": 3.0,
-          "birim": "L",
-      },
-      "Python / Yapay Zeka": {
-          "emoji": "💻",
-          "renk": "#2E7D32",
-          "tip": "Onay (Tik)",
-          "hedef_deger": 1.0,
-      },
-      "Antrenman": {
-          "emoji": "🏋️",
-          "renk": "#EF6C00",
-          "tip": "Onay (Tik)",
-          "hedef_deger": 1.0,
-      },
-      "Kitap Okuma": {
-          "emoji": "📖",
-          "renk": "#C62828",
-          "tip": "Miktar (Sayısal)",
-          "hedef_deger": 30.0,
-          "birim": "sayfa",
-      },
-  }
+  st.session_state["custom_goals"] = hedefleri_yukle()
 
 bugun = datetime.date.today()
 str_bugun = str(bugun)
 
-# Otomatik veri çerçevesi hazırlığı
+# Otomatik veri çerçevesi hazırlığı (Eksik kolonlar varsa ekle)
 df = st.session_state["data"]
 df["Tarih"] = df["Tarih"].astype(str)
+
+# Yeni eklenen hedefler dataframe'de yoksa sütun olarak ekleyelim
+for h_adi in st.session_state["custom_goals"].keys():
+  if h_adi not in df.columns:
+    df[h_adi] = 0.0
 
 if df[df["Tarih"] == str_bugun].empty:
   yeni_satir = {"Tarih": str_bugun, "Uyku": 7}
@@ -155,7 +179,6 @@ with tab_gunluk:
       )
       su_cubugu_html = f'<div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div></div>'
 
-    # Tüm hedefler için standartlaştırılmış tek parça HTML şablonu (girintisiz)
     html_kodu = (
         f'<div style="background-color: {renk}; padding: 14px 18px;'
         " border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0"
@@ -248,12 +271,16 @@ with tab_hedef_yonetimi:
             "hedef_deger": yeni_hedef_deger,
             "birim": yeni_birim,
         }
+        # Hedef yapısını kaydet
+        hedefleri_kaydet(st.session_state["custom_goals"])
+
+        # DataFrame'e de sütun olarak ekle
         if yeni_ad not in df.columns:
           df[yeni_ad] = 0.0
           st.session_state["data"] = df
           verileri_kaydet(df)
 
-        st.success(f"'{yeni_emoji} {yeni_ad}' başarıyla eklendi!")
+        st.success(f"'{yeni_emoji} {yeni_ad}' başarıyla eklendi ve kaydedildi!")
         st.rerun()
       else:
         st.warning("Bu isimde bir hedef zaten var.")
@@ -267,13 +294,14 @@ with tab_hedef_yonetimi:
     if st.button("Seçili Hedefi Kalıcı Olarak Sil"):
       if len(st.session_state["custom_goals"]) > 1:
         del st.session_state["custom_goals"][silinecek_hedef]
-        st.success(f"'{silinecek_hedef}' listeden kaldırıldı.")
+        hedefleri_kaydet(st.session_state["custom_goals"])
+        st.success(f"'{silinecek_hedef}' kalıcı olarak silindi.")
         st.rerun()
       else:
         st.error("En az bir hedef kalmak zorunda.")
 
 # ==========================================
-# 3. SEKME: HAFTALIK İSTATİSTİKLER
+# 3. SEKME: HAFTALİK İSTATİSTİKLER
 # ==========================================
 with tab_haftalik:
   st.header("Haftalık İlerleme")
@@ -295,7 +323,7 @@ with tab_aylik:
     st.metric("😴 Ortalama Uyku Süresi", f"{ortalama_uyku:.1f} Saat")
 
 # ==========================================
-# 5. SEKME: YILLIK İSTATİSTİKLER
+# 5. SEKME: YILLİK İSTATİSTİKLER
 # ==========================================
 with tab_yillik:
   st.header("Yıllık Büyük Resim")

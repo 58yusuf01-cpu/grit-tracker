@@ -19,8 +19,8 @@ st.markdown(
     /* Streamlit butonlarını iOS tarzı yuvarlak butonlara dönüştürme */
     .stButton button {
         border-radius: 50% !important;
-        width: 44px !important;
-        height: 44px !important;
+        width: 42px !important;
+        height: 42px !important;
         padding: 0px !important;
         display: flex !important;
         align-items: center !important;
@@ -32,7 +32,6 @@ st.markdown(
         font-size: 18px !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
         transition: all 0.2s ease !important;
-        margin-top: 2px !important;
     }
     
     .stButton button:hover {
@@ -44,9 +43,9 @@ st.markdown(
     .water-bar-background {
         background-color: rgba(255, 255, 255, 0.3);
         border-radius: 8px;
-        height: 8px;
+        height: 6px;
         width: 100%;
-        margin-top: 8px;
+        margin-top: 6px;
         overflow: hidden;
     }
     
@@ -84,7 +83,7 @@ if "custom_goals" not in st.session_state:
   st.session_state["custom_goals"] = {
       "Su Tüketimi": {
           "emoji": "💧",
-          "renk": "#1E88E5",
+          "renk": "#374151",
           "tip": "Miktar (Sayısal)",
           "hedef_deger": 3.0,
           "birim": "L",
@@ -166,75 +165,66 @@ with tab_gunluk:
     if pd.isna(mevcut_deger):
       mevcut_deger = 0.0
 
-    # Yazıların, çubuğun ve butonun tamamının aynı renkli kapsayıcı içerisinde kalması için tek blok:
-    with st.container():
+    # iOS Tarzı Tek Parça Renkli Baloncu Yapısı (Yazı sol, Buton sağ içinde)
+    st.markdown(
+        f"""
+        <div style="background-color: {renk}; padding: 12px 18px; border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 14px; flex-grow: 1;">
+                <span style="font-size: 26px;">{emoji}</span>
+                <div style="display: flex; flex-direction: column; justify-content: center; width: 100%;">
+                    <div style="font-size: 16px; font-weight: 600; color: white; line-height: 1.2;">{hedef_adi}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if tip == "Onay (Tik)":
+      durum_metni = (
+          "Her gün, Tamamlandı" if mevcut_deger > 0 else "Her gün, 0/1"
+      )
       st.markdown(
-          f"""
-            <div style="background-color: {renk}; padding: 16px 20px; border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
-            """,
+          f"<div style='font-size: 12px; opacity: 0.8; color: white; margin-top: 2px;'>{durum_metni}</div>",
           unsafe_allow_html=True,
       )
-
-      col_sol, col_sag = st.columns([5, 1])
-
-      with col_sol:
+    else:
+      st.markdown(
+          f"<div style='font-size: 12px; opacity: 0.8; color: white; margin-top: 2px;'>Her gün, {mevcut_deger}/{hedef_deger} {birim_etiketi}</div>",
+          unsafe_allow_html=True,
+      )
+      if hedef_adi == "Su Tüketimi":
+        yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
         st.markdown(
             f"""
-                <div style="font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: white; margin-bottom: 4px;">
-                    <span>{emoji}</span> <span>{hedef_adi}</span>
-                </div>
-                """,
+            <div class="water-bar-background">
+                <div class="water-bar-fill" style="width: {yuzde}%;"></div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-        if tip == "Onay (Tik)":
-          durum_metni = "Tamamlandı" if mevcut_deger > 0 else "Her gün"
-          st.markdown(
-              f"<div style='font-size: 13px; opacity: 0.85; color: white;'>{durum_metni}</div>",
-              unsafe_allow_html=True,
-          )
-        else:
-          st.markdown(
-              f"""
-                <div style='font-size: 13px; opacity: 0.9; color: white;'>
-                    Hedef: {hedef_deger} {birim_etiketi} | Alınan: {mevcut_deger} {birim_etiketi}
-                </div>
-                """,
-              unsafe_allow_html=True,
-          )
-          if hedef_adi == "Su Tüketimi":
-            yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
-            st.markdown(
-                f"""
-                  <div class="water-bar-background">
-                      <div class="water-bar-fill" style="width: {yuzde}%;"></div>
-                  </div>
-                  """,
-                unsafe_allow_html=True,
-            )
+    st.markdown(
+        "</div></div>", unsafe_allow_html=True
+    )  # Sol taraf (emoji + metinler) kapandı
 
-      with col_sag:
-        if tip == "Onay (Tik)":
-          buton_etiketi = "✓" if mevcut_deger > 0 else ""
-          if st.button(buton_etiketi, key=f"btn_{hedef_adi}"):
-            yeni_val = 0.0 if mevcut_deger > 0 else 1.0
-            veri_guncelle(hedef_adi, yeni_val)
-            st.rerun()
-        else:
-          artis_miktari = 0.5 if birim_etiketi == "L" else 1.0
-          if st.button("+", key=f"btn_inc_{hedef_adi}"):
-            yeni_val = mevcut_deger + artis_miktari
-            veri_guncelle(hedef_adi, yeni_val)
-            st.rerun()
-
-      st.markdown("</div>", unsafe_allow_html=True)
+    # Sağ taraftaki yuvarlak etkileşim butonu
+    if tip == "Onay (Tik)":
+      buton_etiketi = "✓" if mevcut_deger > 0 else "+"
+      if st.button(buton_etiketi, key=f"btn_{hedef_adi}"):
+        yeni_val = 0.0 if mevcut_deger > 0 else 1.0
+        veri_guncelle(hedef_adi, yeni_val)
+        st.rerun()
+    else:
+      artis_miktari = 0.5 if birim_etiketi == "L" else 1.0
+      if st.button("+", key=f"btn_inc_{hedef_adi}"):
+        yeni_val = mevcut_deger + artis_miktari
+        veri_guncelle(hedef_adi, yeni_val)
+        st.rerun()
 
   # Uyku Takibi Kartı
   mevcut_uyku = int(aktif_satir["Uyku"]) if "Uyku" in aktif_satir else 7
   st.markdown(
       """
-      <div style="background-color: #37474F; padding: 16px 20px; border-radius: 20px; color: white; margin-bottom: 12px;">
-          <div style="font-size: 17px; font-weight: 600; color: white; margin-bottom: 8px;">😴 Uyku Süresi</div>
+      <div style="background-color: #37474F; padding: 14px 18px; border-radius: 20px; color: white; margin-bottom: 12px;">
+          <div style="font-size: 16px; font-weight: 600; color: white; margin-bottom: 6px;">😴 Uyku Süresi</div>
       </div>
       """,
       unsafe_allow_html=True,

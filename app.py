@@ -13,7 +13,10 @@ st.set_page_config(
 VERI_DOSYASI = "veri.csv"
 HEDEF_DOSYASI = "hedefler_ayar.json"
 
-# Varsayılan Hedefler
+HAFTALIK_VERI_DOSYASI = "veri_haftalik.csv"
+HAFTALIK_HEDEF_DOSYASI = "haftalik_hedefler_ayar.json"
+
+# Varsayılan Günlük Hedefler
 DEFAULT_GOALS = {
     "Su Tüketimi": {
         "emoji": "💧",
@@ -43,47 +46,76 @@ DEFAULT_GOALS = {
     },
 }
 
+# Varsayılan Haftalık Hedefler
+DEFAULT_HAFTALIK_GOALS = {
+    "Haftalık Spor": {
+        "emoji": "🔥",
+        "renk": "#1E3A8A",
+        "tip": "Miktar (Sayısal)",
+        "hedef_deger": 4.0,
+        "birim": "gün",
+    },
+    "Kod / Proje": {
+        "emoji": "🚀",
+        "renk": "#581C87",
+        "tip": "Onay (Tik)",
+        "hedef_deger": 1.0,
+    },
+}
 
-def hedefleri_yukle():
-  if os.path.exists(HEDEF_DOSYASI):
+
+def hedefleri_yukle(dosya, varsayilan):
+  if os.path.exists(dosya):
     try:
-      with open(HEDEF_DOSYASI, "r", encoding="utf-8") as f:
+      with open(dosya, "r", encoding="utf-8") as f:
         return json.load(f)
     except:
-      return DEFAULT_GOALS
-  return DEFAULT_GOALS
+      return varsayilan
+  return varsayilan
 
 
-def hedefleri_kaydet(hedefler):
-  with open(HEDEF_DOSYASI, "w", encoding="utf-8") as f:
+def hedefleri_kaydet(dosya, hedefler):
+  with open(dosya, "w", encoding="utf-8") as f:
     json.dump(hedefler, f, ensure_ascii=False, indent=4)
 
 
-def verileri_yukle():
-  if os.path.exists(VERI_DOSYASI):
-    return pd.read_csv(VERI_DOSYASI)
+def verileri_yukle(dosya, ek_kolonlar):
+  if os.path.exists(dosya):
+    return pd.read_csv(dosya)
   else:
-    return pd.DataFrame(columns=["Tarih", "Uyku"])
+    cols = ["Tarih"] + ek_kolonlar
+    return pd.DataFrame(columns=cols)
 
 
-def verileri_kaydet(df):
-  df.to_csv(VERI_DOSYASI, index=False)
+def verileri_kaydet(dosya, df):
+  df.to_csv(dosya, index=False)
 
 
 if "data" not in st.session_state:
-  st.session_state["data"] = verileri_yukle()
+  st.session_state["data"] = verileri_yukle(VERI_DOSYASI, ["Uyku"])
 
 if "custom_goals" not in st.session_state:
-  st.session_state["custom_goals"] = hedefleri_yukle()
+  st.session_state["custom_goals"] = hedefleri_yukle(
+      HEDEF_DOSYASI, DEFAULT_GOALS
+  )
+
+if "haftalik_data" not in st.session_state:
+  st.session_state["haftalik_data"] = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
+
+if "custom_haftalik_goals" not in st.session_state:
+  st.session_state["custom_haftalik_goals"] = hedefleri_yukle(
+      HAFTALIK_HEDEF_DOSYASI, DEFAULT_HAFTALIK_GOALS
+  )
 
 bugun = datetime.date.today()
 str_bugun = str(bugun)
 
-# Otomatik veri çerçevesi hazırlığı (Eksik kolonlar varsa ekle)
+yil, hafta_num, _ = bugun.isocalendar()
+str_hafta = f"{yil}-W{hafta_num:02d}"
+
+# Günlük DataFrame hazırlığı
 df = st.session_state["data"]
 df["Tarih"] = df["Tarih"].astype(str)
-
-# Yeni eklenen hedefler dataframe'de yoksa sütun olarak ekleyelim
 for h_adi in st.session_state["custom_goals"].keys():
   if h_adi not in df.columns:
     df[h_adi] = 0.0
@@ -94,14 +126,36 @@ if df[df["Tarih"] == str_bugun].empty:
     yeni_satir[h] = 0.0
   df = pd.concat([df, pd.DataFrame([yeni_satir])], ignore_index=True)
   st.session_state["data"] = df
-  verileri_kaydet(df)
+  verileri_kaydet(VERI_DOSYASI, df)
+
+# Haftalık DataFrame hazırlığı
+df_h = st.session_state["haftalik_data"]
+df_h["Tarih"] = df_h["Tarih"].astype(str)
+for h_adi in st.session_state["custom_haftalik_goals"].keys():
+  if h_adi not in df_h.columns:
+    df_h[h_adi] = 0.0
+
+if df_h[df_h["Tarih"] == str_hafta].empty:
+  yeni_satir_h = {"Tarih": str_hafta}
+  for h in st.session_state["custom_haftalik_goals"].keys():
+    yeni_satir_h[h] = 0.0
+  df_h = pd.concat([df_h, pd.DataFrame([yeni_satir_h])], ignore_index=True)
+  st.session_state["haftalik_data"] = df_h
+  verileri_kaydet(HAFTALIK_VERI_DOSYASI, df_h)
 
 
 def veri_guncelle(kolon, deger):
   global df
   df.loc[df["Tarih"] == str_bugun, kolon] = deger
   st.session_state["data"] = df
-  verileri_kaydet(df)
+  verileri_kaydet(VERI_DOSYASI, df)
+
+
+def haftalik_veri_guncelle(kolon, deger):
+  global df_h
+  df_h.loc[df_h["Tarih"] == str_hafta, kolon] = deger
+  st.session_state["haftalik_data"] = df_h
+  verileri_kaydet(HAFTALIK_VERI_DOSYASI, df_h)
 
 
 # --- BUTON TIKLAMA (QUERY PARAMS) YÖNETİMİ ---
@@ -123,25 +177,53 @@ if "action_inc" in st.query_params:
   st.query_params.clear()
   st.rerun()
 
+if "action_toggle_w" in st.query_params:
+  h_adi = st.query_params["action_toggle_w"]
+  if h_adi in df_h.columns:
+    mev = df_h.loc[df_h["Tarih"] == str_hafta, h_adi].values[0]
+    yeni = 0.0 if mev > 0 else 1.0
+    haftalik_veri_guncelle(h_adi, yeni)
+  st.query_params.clear()
+  st.rerun()
+
+if "action_inc_w" in st.query_params:
+  h_adi = st.query_params["action_inc_w"]
+  if h_adi in df_h.columns:
+    mev = df_h.loc[df_h["Tarih"] == str_hafta, h_adi].values[0]
+    haftalik_veri_guncelle(h_adi, mev + 1.0)
+  st.query_params.clear()
+  st.rerun()
+
 # --- ÜST MENÜ / SEKMELER ---
-tab_gunluk, tab_hedef_yonetimi, tab_haftalik, tab_aylik, tab_yillik = st.tabs(
+(
+    tab_gunluk,
+    tab_haftalik_hedefler,
+    tab_hedef_yonetimi,
+    tab_haftalik_gecmis,
+    tab_aylik,
+    tab_yillik,
+) = st.tabs(
     [
         "📅 Bugün",
+        "📆 Haftalık Hedefler",
         "⚙️ Hedef Yönetimi",
-        "📊 Haftalık",
+        "📊 Haftalık Geçmiş",
         "📈 Aylık",
         "🏆 Yıllık",
     ]
 )
 
+
 # ==========================================
 # 1. SEKME: BUGÜN
 # ==========================================
-with tab_gunluk:
+@st.fragment
+def gunluk_hedefler_bileseni():
   st.header("Günlük Hedefler")
   st.caption(f"Tarih: {bugun.strftime('%d.%m.%Y')}")
 
-  aktif_satir = df[df["Tarih"] == str_bugun].iloc[0]
+  current_df = st.session_state["data"]
+  aktif_satir = current_df[current_df["Tarih"] == str_bugun].iloc[0]
 
   for hedef_adi, detay in st.session_state["custom_goals"].items():
     emoji = detay.get("emoji", "🎯")
@@ -231,89 +313,241 @@ with tab_gunluk:
     veri_guncelle("Uyku", yeni_uyku)
     st.rerun()
 
+
+with tab_gunluk:
+  gunluk_hedefler_bileseni()
+
 # ==========================================
-# 2. SEKME: HEDEF YÖNETİMİ
+# 2. SEKME: HAFTALIK HEDEFLER
+# ==========================================
+with tab_haftalik_hedefler:
+  st.header("Haftalık Hedefler")
+  st.caption(f"Bu Hafta: {str_hafta}")
+
+  aktif_hafta_satir = df_h[df_h["Tarih"] == str_hafta].iloc[0]
+
+  for hedef_adi, detay in st.session_state["custom_haftalik_goals"].items():
+    emoji = detay.get("emoji", "🎯")
+    renk = detay.get("renk", "#1E3A8A")
+    tip = detay.get("tip", "Onay (Tik)")
+    hedef_deger = detay.get("hedef_deger", 1.0)
+    birim_etiketi = detay.get("birim", "")
+
+    mevcut_deger = (
+        aktif_hafta_satir[hedef_adi]
+        if hedef_adi in aktif_hafta_satir
+        else 0.0
+    )
+    if pd.isna(mevcut_deger):
+      mevcut_deger = 0.0
+
+    if tip == "Onay (Tik)":
+      tamamlandi = mevcut_deger > 0
+      durum_metni = "Bu hafta, Tamamlandı" if tamamlandi else "Bu hafta, 0/1"
+      buton_sembol = "✓" if tamamlandi else "+"
+      param_adi = "action_toggle_w"
+    else:
+      durum_metni = (
+          f"Bu hafta, {mevcut_deger:g}/{hedef_deger:g} {birim_etiketi}"
+      )
+      buton_sembol = "+"
+      param_adi = "action_inc_w"
+
+    prog_bar_html = ""
+    if tip == "Miktar (Sayısal)" and hedef_deger > 0:
+      yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
+      prog_bar_html = f'<div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div></div>'
+
+    html_kodu_w = (
+        f'<div style="background-color: {renk}; padding: 14px 18px;'
+        " border-radius: 20px; color: white; margin-bottom: 12px; box-shadow: 0"
+        " 4px 12px rgba(0, 0, 0, 0.2); display: flex; align-items: center;"
+        ' justify-content: space-between;">'
+        '<div style="display: flex; align-items: center; gap: 14px;'
+        ' flex-grow: 1; overflow: hidden;">'
+        f'<span style="font-size: 28px; flex-shrink: 0;">{emoji}</span>'
+        '<div style="display: flex; flex-direction: column; width: 100%;">'
+        f'<div style="font-size: 16px; font-weight: 600; color: white;'
+        f' line-height: 1.2;">{hedef_adi}</div>'
+        f'<div style="font-size: 12px; opacity: 0.85; color: white;'
+        f' margin-top: 3px;">{durum_metni}</div>'
+        f"{prog_bar_html}"
+        "</div>"
+        "</div>"
+        '<div style="margin-left: 14px; flex-shrink: 0;">'
+        f'<a href="?{param_adi}={hedef_adi}" target="_self"'
+        ' style="width: 42px; height: 42px; border-radius: 50%;'
+        ' background-color: rgba(255, 255, 255, 0.25); border: 2px solid'
+        ' rgba(255, 255, 255, 0.6); display: flex; align-items: center;'
+        ' justify-content: center; color: white; text-decoration: none;'
+        ' font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px'
+        f' rgba(0,0,0,0.15);">{buton_sembol}</a>'
+        "</div>"
+        "</div>"
+    )
+
+    st.markdown(html_kodu_w, unsafe_allow_html=True)
+
+# ==========================================
+# 3. SEKME: HEDEF YÖNETİMİ
 # ==========================================
 with tab_hedef_yonetimi:
   st.header("Hedefleri ve Görsel Detayları Düzenle")
 
-  with st.form("yeni_hedef_form"):
-    st.subheader("Yeni Hedef Ekle")
-    col_h1, col_h2 = st.columns(2)
-    with col_h1:
-      yeni_ad = st.text_input("Hedef Adı (Örn: Kreatin)")
-      yeni_emoji = st.text_input("Emoji (Örn: ⚡)", value="🎯")
-    with col_h2:
-      yeni_tip = st.selectbox(
-          "Hedef Tipi", ["Onay (Tik)", "Miktar (Sayısal)"]
-      )
-      yeni_renk = st.color_picker("Hedef Rengi", value="#37474F")
+  hedef_turu_secimi = st.radio(
+      "Yönetilecek Hedef Kategorisi", ["Günlük Hedefler", "Haftalık Hedefler"]
+  )
 
-    yeni_birim = ""
-    yeni_hedef_deger = 1.0
-    if yeni_tip == "Miktar (Sayısal)":
-      col_b1, col_b2 = st.columns(2)
-      with col_b1:
-        yeni_birim = st.text_input("Birim (Örn: gr, adet)", value="gr")
-      with col_b2:
-        yeni_hedef_deger = st.number_input(
-            "Hedeflenen Miktar", min_value=0.1, value=3.0
+  if hedef_turu_secimi == "Günlük Hedefler":
+    st.subheader("Günlük Yeni Hedef Ekle")
+    with st.form("yeni_hedef_form"):
+      col_h1, col_h2 = st.columns(2)
+      with col_h1:
+        yeni_ad = st.text_input("Hedef Adı (Örn: Kreatin)")
+        yeni_emoji = st.text_input("Emoji (Örn: ⚡)", value="🎯")
+      with col_h2:
+        yeni_tip = st.selectbox(
+            "Hedef Tipi", ["Onay (Tik)", "Miktar (Sayısal)"]
         )
+        yeni_renk = st.color_picker("Hedef Rengi", value="#37474F")
 
-    hedef_ekle_buton = st.form_submit_button("Sisteme Ekle")
+      yeni_birim = ""
+      yeni_hedef_deger = 1.0
+      if yeni_tip == "Miktar (Sayısal)":
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+          yeni_birim = st.text_input("Birim (Örn: gr, adet)", value="gr")
+        with col_b2:
+          yeni_hedef_deger = st.number_input(
+              "Hedeflenen Miktar", min_value=0.1, value=3.0
+          )
 
-    if hedef_ekle_buton and yeni_ad:
-      if yeni_ad not in st.session_state["custom_goals"]:
-        st.session_state["custom_goals"][yeni_ad] = {
-            "emoji": yeni_emoji,
-            "renk": yeni_renk,
-            "tip": yeni_tip,
-            "hedef_deger": yeni_hedef_deger,
-            "birim": yeni_birim,
-        }
-        # Hedef yapısını kaydet
-        hedefleri_kaydet(st.session_state["custom_goals"])
+      hedef_ekle_buton = st.form_submit_button("Günlük Hedef Ekle")
 
-        # DataFrame'e de sütun olarak ekle
-        if yeni_ad not in df.columns:
-          df[yeni_ad] = 0.0
-          st.session_state["data"] = df
-          verileri_kaydet(df)
+      if hedef_ekle_buton and yeni_ad:
+        if yeni_ad not in st.session_state["custom_goals"]:
+          st.session_state["custom_goals"][yeni_ad] = {
+              "emoji": yeni_emoji,
+              "renk": yeni_renk,
+              "tip": yeni_tip,
+              "hedef_deger": yeni_hedef_deger,
+              "birim": yeni_birim,
+          }
+          hedefleri_kaydet(HEDEF_DOSYASI, st.session_state["custom_goals"])
 
-        st.success(f"'{yeni_emoji} {yeni_ad}' başarıyla eklendi ve kaydedildi!")
-        st.rerun()
-      else:
-        st.warning("Bu isimde bir hedef zaten var.")
+          if yeni_ad not in df.columns:
+            df[yeni_ad] = 0.0
+            st.session_state["data"] = df
+            verileri_kaydet(VERI_DOSYASI, df)
 
-  st.divider()
-  st.subheader("Mevcut Hedefleri Yönet")
-  if st.session_state["custom_goals"]:
-    silinecek_hedef = st.selectbox(
-        "Silmek istediğin hedefi seç:", list(st.session_state["custom_goals"].keys())
-    )
-    if st.button("Seçili Hedefi Kalıcı Olarak Sil"):
-      if len(st.session_state["custom_goals"]) > 1:
-        del st.session_state["custom_goals"][silinecek_hedef]
-        hedefleri_kaydet(st.session_state["custom_goals"])
-        st.success(f"'{silinecek_hedef}' kalıcı olarak silindi.")
-        st.rerun()
-      else:
-        st.error("En az bir hedef kalmak zorunda.")
+          st.success(
+              f"'{yeni_emoji} {yeni_ad}' başarıyla eklendi ve kaydedildi!"
+          )
+          st.rerun()
+        else:
+          st.warning("Bu isimde bir günlük hedef zaten var.")
 
-# ==========================================
-# 3. SEKME: HAFTALİK İSTATİSTİKLER
-# ==========================================
-with tab_haftalik:
-  st.header("Haftalık İlerleme")
-  df_w = st.session_state["data"]
-  if df_w.empty or len(df_w.columns) <= 2:
-    st.info("Henüz yeterli veri girilmedi.")
+    st.divider()
+    st.subheader("Mevcut Günlük Hedefleri Yönet")
+    if st.session_state["custom_goals"]:
+      silinecek_hedef = st.selectbox(
+          "Silinecek günlük hedefi seç:",
+          list(st.session_state["custom_goals"].keys()),
+          key="del_daily",
+      )
+      if st.button("Seçili Günlük Hedefi Kalıcı Olarak Sil"):
+        if len(st.session_state["custom_goals"]) > 1:
+          del st.session_state["custom_goals"][silinecek_hedef]
+          hedefleri_kaydet(HEDEF_DOSYASI, st.session_state["custom_goals"])
+          st.success(f"'{silinecek_hedef}' kalıcı olarak silindi.")
+          st.rerun()
+        else:
+          st.error("En az bir günlük hedef kalmak zorunda.")
+
   else:
-    st.subheader("Kayıtlı Veri Tablosu")
-    st.dataframe(df_w)
+    st.subheader("Haftalık Yeni Hedef Ekle")
+    with st.form("yeni_haftalik_hedef_form"):
+      col_wh1, col_wh2 = st.columns(2)
+      with col_wh1:
+        yeni_w_ad = st.text_input("Haftalık Hedef Adı")
+        yeni_w_emoji = st.text_input("Emoji", value="⚡")
+      with col_wh2:
+        yeni_w_tip = st.selectbox(
+            "Hedef Tipi", ["Onay (Tik)", "Miktar (Sayısal)"], key="w_tip"
+        )
+        yeni_w_renk = st.color_picker("Hedef Rengi", value="#1E3A8A", key="w_col")
+
+      yeni_w_birim = ""
+      yeni_w_hedef_deger = 1.0
+      if yeni_w_tip == "Miktar (Sayısal)":
+        col_wb1, col_wb2 = st.columns(2)
+        with col_wb1:
+          yeni_w_birim = st.text_input("Birim (Örn: gün, saat)", value="gün")
+        with col_wb2:
+          yeni_w_hedef_deger = st.number_input(
+              "Hedeflenen Miktar", min_value=0.1, value=4.0, key="w_val"
+          )
+
+      hedef_w_ekle_buton = st.form_submit_button("Haftalık Hedef Ekle")
+
+      if hedef_w_ekle_buton and yeni_w_ad:
+        if yeni_w_ad not in st.session_state["custom_haftalik_goals"]:
+          st.session_state["custom_haftalik_goals"][yeni_w_ad] = {
+              "emoji": yeni_w_emoji,
+              "renk": yeni_w_renk,
+              "tip": yeni_w_tip,
+              "hedef_deger": yeni_w_hedef_deger,
+              "birim": yeni_w_birim,
+          }
+          hedefleri_kaydet(
+              HAFTALIK_HEDEF_DOSYASI, st.session_state["custom_haftalik_goals"]
+          )
+
+          if yeni_w_ad not in df_h.columns:
+            df_h[yeni_w_ad] = 0.0
+            st.session_state["haftalik_data"] = df_h
+            verileri_kaydet(HAFTALIK_VERI_DOSYASI, df_h)
+
+          st.success(
+              f"'{yeni_w_emoji} {yeni_w_ad}' başarıyla eklendi ve"
+              " kaydedildi!"
+          )
+          st.rerun()
+        else:
+          st.warning("Bu isimde bir haftalık hedef zaten var.")
+
+    st.divider()
+    st.subheader("Mevcut Haftalık Hedefleri Yönet")
+    if st.session_state["custom_haftalik_goals"]:
+      silinecek_w_hedef = st.selectbox(
+          "Silinecek haftalık hedefi seç:",
+          list(st.session_state["custom_haftalik_goals"].keys()),
+          key="del_weekly",
+      )
+      if st.button("Seçili Haftalık Hedefi Kalıcı Olarak Sil"):
+        if len(st.session_state["custom_haftalik_goals"]) > 1:
+          del st.session_state["custom_haftalik_goals"][silinecek_w_hedef]
+          hedefleri_kaydet(
+              HAFTALIK_HEDEF_DOSYASI, st.session_state["custom_haftalik_goals"]
+          )
+          st.success(f"'{silinecek_w_hedef}' kalıcı olarak silindi.")
+          st.rerun()
+        else:
+          st.error("En az bir haftalık hedef kalmak zorunda.")
 
 # ==========================================
-# 4. SEKME: AYLIK İSTATİSTİKLER
+# 4. SEKME: HAFTALIK GEÇMİŞ
+# ==========================================
+with tab_haftalik_gecmis:
+  st.header("Haftalık Geçmiş Tablosu")
+  df_w_tab = st.session_state["haftalik_data"]
+  if df_w_tab.empty or len(df_w_tab.columns) <= 1:
+    st.info("Henüz yeterli haftalık veri girilmedi.")
+  else:
+    st.dataframe(df_w_tab)
+
+# ==========================================
+# 5. SEKME: AYLIK İSTATİSTİKLER
 # ==========================================
 with tab_aylik:
   st.header("Aylık Rapor")
@@ -323,7 +557,7 @@ with tab_aylik:
     st.metric("😴 Ortalama Uyku Süresi", f"{ortalama_uyku:.1f} Saat")
 
 # ==========================================
-# 5. SEKME: YILLİK İSTATİSTİKLER
+# 6. SEKME: YILLİK İSTATİSTİKLER
 # ==========================================
 with tab_yillik:
   st.header("Yıllık Büyük Resim")

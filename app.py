@@ -81,7 +81,15 @@ def hedefleri_kaydet(dosya, hedefler):
 
 def verileri_yukle(dosya, ek_kolonlar):
   if os.path.exists(dosya):
-    return pd.read_csv(dosya)
+    try:
+      df = pd.read_csv(dosya)
+      if "Tarih" not in df.columns:
+        cols = ["Tarih"] + ek_kolonlar
+        return pd.DataFrame(columns=cols)
+      return df
+    except:
+      cols = ["Tarih"] + ek_kolonlar
+      return pd.DataFrame(columns=cols)
   else:
     cols = ["Tarih"] + ek_kolonlar
     return pd.DataFrame(columns=cols)
@@ -91,31 +99,27 @@ def verileri_kaydet(dosya, df):
   df.to_csv(dosya, index=False)
 
 
-if "data" not in st.session_state:
-  st.session_state["data"] = verileri_yukle(VERI_DOSYASI, ["Uyku"])
-
-if "custom_goals" not in st.session_state:
-  st.session_state["custom_goals"] = hedefleri_yukle(
-      HEDEF_DOSYASI, DEFAULT_GOALS
-  )
-
-if "haftalik_data" not in st.session_state:
-  st.session_state["haftalik_data"] = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
-
-if "custom_haftalik_goals" not in st.session_state:
-  st.session_state["custom_haftalik_goals"] = hedefleri_yukle(
-      HAFTALIK_HEDEF_DOSYASI, DEFAULT_HAFTALIK_GOALS
-  )
-
 bugun = datetime.date.today()
 str_bugun = str(bugun)
 
 yil, hafta_num, _ = bugun.isocalendar()
 str_hafta = f"{yil}-W{hafta_num:02d}"
 
-# Günlük DataFrame hazırlığı
-df = st.session_state["data"]
+# Session State Başlatma
+if "custom_goals" not in st.session_state:
+  st.session_state["custom_goals"] = hedefleri_yukle(
+      HEDEF_DOSYASI, DEFAULT_GOALS
+  )
+
+if "custom_haftalik_goals" not in st.session_state:
+  st.session_state["custom_haftalik_goals"] = hedefleri_yukle(
+      HAFTALIK_HEDEF_DOSYASI, DEFAULT_HAFTALIK_GOALS
+  )
+
+# Günlük DataFrame yükleme ve eksik kolonları tamamlama
+df = verileri_yukle(VERI_DOSYASI, ["Uyku"])
 df["Tarih"] = df["Tarih"].astype(str)
+
 for h_adi in st.session_state["custom_goals"].keys():
   if h_adi not in df.columns:
     df[h_adi] = 0.0
@@ -125,12 +129,14 @@ if df[df["Tarih"] == str_bugun].empty:
   for h in st.session_state["custom_goals"].keys():
     yeni_satir[h] = 0.0
   df = pd.concat([df, pd.DataFrame([yeni_satir])], ignore_index=True)
-  st.session_state["data"] = df
   verileri_kaydet(VERI_DOSYASI, df)
 
-# Haftalık DataFrame hazırlığı
-df_h = st.session_state["haftalik_data"]
+st.session_state["data"] = df
+
+# Haftalık DataFrame yükleme
+df_h = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
 df_h["Tarih"] = df_h["Tarih"].astype(str)
+
 for h_adi in st.session_state["custom_haftalik_goals"].keys():
   if h_adi not in df_h.columns:
     df_h[h_adi] = 0.0
@@ -140,29 +146,47 @@ if df_h[df_h["Tarih"] == str_hafta].empty:
   for h in st.session_state["custom_haftalik_goals"].keys():
     yeni_satir_h[h] = 0.0
   df_h = pd.concat([df_h, pd.DataFrame([yeni_satir_h])], ignore_index=True)
-  st.session_state["haftalik_data"] = df_h
   verileri_kaydet(HAFTALIK_VERI_DOSYASI, df_h)
+
+st.session_state["haftalik_data"] = df_h
 
 
 def veri_guncelle(kolon, deger):
-  global df
-  df.loc[df["Tarih"] == str_bugun, kolon] = deger
-  st.session_state["data"] = df
-  verileri_kaydet(VERI_DOSYASI, df)
+  current_df = verileri_yukle(VERI_DOSYASI, ["Uyku"])
+  current_df["Tarih"] = current_df["Tarih"].astype(str)
+  if current_df[current_df["Tarih"] == str_bugun].empty:
+    yeni_satir = {"Tarih": str_bugun, "Uyku": 7}
+    for h in st.session_state["custom_goals"].keys():
+      yeni_satir[h] = 0.0
+    current_df = pd.concat(
+        [current_df, pd.DataFrame([yeni_satir])], ignore_index=True
+    )
+  current_df.loc[current_df["Tarih"] == str_bugun, kolon] = deger
+  verileri_kaydet(VERI_DOSYASI, current_df)
+  st.session_state["data"] = current_df
 
 
 def haftalik_veri_guncelle(kolon, deger):
-  global df_h
-  df_h.loc[df_h["Tarih"] == str_hafta, kolon] = deger
-  st.session_state["haftalik_data"] = df_h
-  verileri_kaydet(HAFTALIK_VERI_DOSYASI, df_h)
+  current_df_h = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
+  current_df_h["Tarih"] = current_df_h["Tarih"].astype(str)
+  if current_df_h[current_df_h["Tarih"] == str_hafta].empty:
+    yeni_satir_h = {"Tarih": str_hafta}
+    for h in st.session_state["custom_haftalik_goals"].keys():
+      yeni_satir_h[h] = 0.0
+    current_df_h = pd.concat(
+        [current_df_h, pd.DataFrame([yeni_satir_h])], ignore_index=True
+    )
+  current_df_h.loc[current_df_h["Tarih"] == str_hafta, kolon] = deger
+  verileri_kaydet(HAFTALIK_VERI_DOSYASI, current_df_h)
+  st.session_state["haftalik_data"] = current_df_h
 
 
 # --- BUTON TIKLAMA (QUERY PARAMS) YÖNETİMİ ---
 if "action_toggle" in st.query_params:
   h_adi = st.query_params["action_toggle"]
-  if h_adi in df.columns:
-    mev = df.loc[df["Tarih"] == str_bugun, h_adi].values[0]
+  current_df = verileri_yukle(VERI_DOSYASI, ["Uyku"])
+  if h_adi in current_df.columns:
+    mev = current_df.loc[current_df["Tarih"] == str_bugun, h_adi].values[0]
     yeni = 0.0 if mev > 0 else 1.0
     veri_guncelle(h_adi, yeni)
   st.query_params.clear()
@@ -170,17 +194,26 @@ if "action_toggle" in st.query_params:
 
 if "action_inc" in st.query_params:
   h_adi = st.query_params["action_inc"]
-  if h_adi in df.columns:
-    mev = df.loc[df["Tarih"] == str_bugun, h_adi].values[0]
+  current_df = verileri_yukle(VERI_DOSYASI, ["Uyku"])
+  if h_adi in current_df.columns:
+    mev = current_df.loc[current_df["Tarih"] == str_bugun, h_adi].values[0]
+    hedef_sinir = st.session_state["custom_goals"][h_adi].get(
+        "hedef_deger", 1.0
+    )
     artis = 0.5 if h_adi == "Su Tüketimi" else 1.0
-    veri_guncelle(h_adi, mev + artis)
+    yeni_deger = mev + artis
+    if yeni_deger <= hedef_sinir:
+      veri_guncelle(h_adi, yeni_deger)
   st.query_params.clear()
   st.rerun()
 
 if "action_toggle_w" in st.query_params:
   h_adi = st.query_params["action_toggle_w"]
-  if h_adi in df_h.columns:
-    mev = df_h.loc[df_h["Tarih"] == str_hafta, h_adi].values[0]
+  current_df_h = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
+  if h_adi in current_df_h.columns:
+    mev = current_df_h.loc[
+        current_df_h["Tarih"] == str_hafta, h_adi
+    ].values[0]
     yeni = 0.0 if mev > 0 else 1.0
     haftalik_veri_guncelle(h_adi, yeni)
   st.query_params.clear()
@@ -188,15 +221,24 @@ if "action_toggle_w" in st.query_params:
 
 if "action_inc_w" in st.query_params:
   h_adi = st.query_params["action_inc_w"]
-  if h_adi in df_h.columns:
-    mev = df_h.loc[df_h["Tarih"] == str_hafta, h_adi].values[0]
-    haftalik_veri_guncelle(h_adi, mev + 1.0)
+  current_df_h = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
+  if h_adi in current_df_h.columns:
+    mev = current_df_h.loc[
+        current_df_h["Tarih"] == str_hafta, h_adi
+    ].values[0]
+    hedef_sinir = st.session_state["custom_haftalik_goals"][h_adi].get(
+        "hedef_deger", 1.0
+    )
+    yeni_deger = mev + 1.0
+    if yeni_deger <= hedef_sinir:
+      haftalik_veri_guncelle(h_adi, yeni_deger)
   st.query_params.clear()
   st.rerun()
 
 # --- ÜST MENÜ / SEKMELER ---
 (
     tab_gunluk,
+    tab_gunluk_gecmis,
     tab_haftalik_hedefler,
     tab_hedef_yonetimi,
     tab_haftalik_gecmis,
@@ -205,10 +247,11 @@ if "action_inc_w" in st.query_params:
 ) = st.tabs(
     [
         "📅 Bugün",
+        "📊 Günlük Geçmiş",
         "📆 Haftalık Hedefler",
         "⚙️ Hedef Yönetimi",
-        "📊 Haftalık Geçmiş",
-        "📈 Aylık",
+        "📈 Haftalık Geçmiş",
+        "📉 Aylık",
         "🏆 Yıllık",
     ]
 )
@@ -222,7 +265,17 @@ def gunluk_hedefler_bileseni():
   st.header("Günlük Hedefler")
   st.caption(f"Tarih: {bugun.strftime('%d.%m.%Y')}")
 
-  current_df = st.session_state["data"]
+  current_df = verileri_yukle(VERI_DOSYASI, ["Uyku"])
+  current_df["Tarih"] = current_df["Tarih"].astype(str)
+
+  if current_df[current_df["Tarih"] == str_bugun].empty:
+    yeni_satir = {"Tarih": str_bugun, "Uyku": 7}
+    for h in st.session_state["custom_goals"].keys():
+      yeni_satir[h] = 0.0
+    current_df = pd.concat(
+        [current_df, pd.DataFrame([yeni_satir])], ignore_index=True
+    )
+
   aktif_satir = current_df[current_df["Tarih"] == str_bugun].iloc[0]
 
   for hedef_adi, detay in st.session_state["custom_goals"].items():
@@ -238,8 +291,9 @@ def gunluk_hedefler_bileseni():
     if pd.isna(mevcut_deger):
       mevcut_deger = 0.0
 
+    tamamlandi = mevcut_deger >= hedef_deger
+
     if tip == "Onay (Tik)":
-      tamamlandi = mevcut_deger > 0
       durum_metni = "Her gün, Tamamlandı" if tamamlandi else "Her gün, 0/1"
       buton_sembol = "✓" if tamamlandi else "+"
       param_adi = "action_toggle"
@@ -247,8 +301,12 @@ def gunluk_hedefler_bileseni():
       durum_metni = (
           f"Her gün, {mevcut_deger:g}/{hedef_deger:g} {birim_etiketi}"
       )
-      buton_sembol = "+"
-      param_adi = "action_inc"
+      if tamamlandi:
+        buton_sembol = "✓"
+        param_adi = ""  # Hedef doldu, işlem yapılmasın
+      else:
+        buton_sembol = "+"
+        param_adi = "action_inc"
 
     su_cubugu_html = ""
     if hedef_adi == "Su Tüketimi" or (
@@ -260,6 +318,26 @@ def gunluk_hedefler_bileseni():
           else 0
       )
       su_cubugu_html = f'<div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div></div>'
+
+    # Buton HTML yapısı (Eğer hedef tamamlandıysa tıklama engellenir)
+    if tamamlandi and tip == "Miktar (Sayısal)":
+      buton_html = (
+          '<div style="width: 42px; height: 42px; border-radius: 50%;'
+          " background-color: rgba(46, 125, 50, 0.6); border: 2px solid"
+          ' rgba(255, 255, 255, 0.8); display: flex; align-items: center;'
+          " justify-content: center; color: white; font-weight: bold;"
+          ' font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">✓</div>'
+      )
+    else:
+      buton_html = (
+          f'<a href="?{param_adi}={hedef_adi}" target="_self"'
+          ' style="width: 42px; height: 42px; border-radius: 50%;'
+          ' background-color: rgba(255, 255, 255, 0.25); border: 2px solid'
+          ' rgba(255, 255, 255, 0.6); display: flex; align-items: center;'
+          ' justify-content: center; color: white; text-decoration: none;'
+          ' font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px'
+          f' rgba(0,0,0,0.15);">{buton_sembol}</a>'
+      )
 
     html_kodu = (
         f'<div style="background-color: {renk}; padding: 14px 18px;'
@@ -277,15 +355,7 @@ def gunluk_hedefler_bileseni():
         f"{su_cubugu_html}"
         "</div>"
         "</div>"
-        '<div style="margin-left: 14px; flex-shrink: 0;">'
-        f'<a href="?{param_adi}={hedef_adi}" target="_self"'
-        ' style="width: 42px; height: 42px; border-radius: 50%;'
-        ' background-color: rgba(255, 255, 255, 0.25); border: 2px solid'
-        ' rgba(255, 255, 255, 0.6); display: flex; align-items: center;'
-        ' justify-content: center; color: white; text-decoration: none;'
-        ' font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px'
-        f' rgba(0,0,0,0.15);">{buton_sembol}</a>'
-        "</div>"
+        f'<div style="margin-left: 14px; flex-shrink: 0;">{buton_html}</div>'
         "</div>"
     )
 
@@ -317,14 +387,42 @@ def gunluk_hedefler_bileseni():
 with tab_gunluk:
   gunluk_hedefler_bileseni()
 
+
 # ==========================================
-# 2. SEKME: HAFTALIK HEDEFLER
+# 2. SEKME: GÜNLÜK GEÇMİŞ (YENİ İSTATİSTİK)
+# ==========================================
+with tab_gunluk_gecmis:
+  st.header("Geçmiş Günlük Kayıtlar")
+  st.caption(
+      "Tüm günlere ait girdiğin verileri ve istatistikleri buradan"
+      " inceleyebilirsin."
+  )
+  df_gecmis = verileri_yukle(VERI_DOSYASI, ["Uyku"])
+  if not df_gecmis.empty:
+    st.dataframe(df_gecmis.sort_values(by="Tarih", ascending=False), use_container_width=True)
+  else:
+    st.info("Henüz kayıtlı günlük veri bulunmuyor.")
+
+
+# ==========================================
+# 3. SEKME: HAFTALIK HEDEFLER
 # ==========================================
 with tab_haftalik_hedefler:
   st.header("Haftalık Hedefler")
   st.caption(f"Bu Hafta: {str_hafta}")
 
-  aktif_hafta_satir = df_h[df_h["Tarih"] == str_hafta].iloc[0]
+  current_df_h = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
+  current_df_h["Tarih"] = current_df_h["Tarih"].astype(str)
+
+  if current_df_h[current_df_h["Tarih"] == str_hafta].empty:
+    yeni_satir_h = {"Tarih": str_hafta}
+    for h in st.session_state["custom_haftalik_goals"].keys():
+      yeni_satir_h[h] = 0.0
+    current_df_h = pd.concat(
+        [current_df_h, pd.DataFrame([yeni_satir_h])], ignore_index=True
+    )
+
+  aktif_hafta_satir = current_df_h[current_df_h["Tarih"] == str_hafta].iloc[0]
 
   for hedef_adi, detay in st.session_state["custom_haftalik_goals"].items():
     emoji = detay.get("emoji", "🎯")
@@ -341,8 +439,9 @@ with tab_haftalik_hedefler:
     if pd.isna(mevcut_deger):
       mevcut_deger = 0.0
 
+    tamamlandi = mevcut_deger >= hedef_deger
+
     if tip == "Onay (Tik)":
-      tamamlandi = mevcut_deger > 0
       durum_metni = "Bu hafta, Tamamlandı" if tamamlandi else "Bu hafta, 0/1"
       buton_sembol = "✓" if tamamlandi else "+"
       param_adi = "action_toggle_w"
@@ -350,13 +449,36 @@ with tab_haftalik_hedefler:
       durum_metni = (
           f"Bu hafta, {mevcut_deger:g}/{hedef_deger:g} {birim_etiketi}"
       )
-      buton_sembol = "+"
-      param_adi = "action_inc_w"
+      if tamamlandi:
+        buton_sembol = "✓"
+        param_adi = ""
+      else:
+        buton_sembol = "+"
+        param_adi = "action_inc_w"
 
     prog_bar_html = ""
     if tip == "Miktar (Sayısal)" and hedef_deger > 0:
       yuzde = min(int((mevcut_deger / hedef_deger) * 100), 100)
       prog_bar_html = f'<div style="background-color: rgba(255, 255, 255, 0.3); border-radius: 6px; height: 6px; width: 100%; margin-top: 8px; overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #ffffff 0%, #e0f7fa 100%); border-radius: 6px; width: {yuzde}%;"></div></div>'
+
+    if tamamlandi and tip == "Miktar (Sayısal)":
+      buton_html_w = (
+          '<div style="width: 42px; height: 42px; border-radius: 50%;'
+          " background-color: rgba(30, 58, 138, 0.6); border: 2px solid"
+          ' rgba(255, 255, 255, 0.8); display: flex; align-items: center;'
+          " justify-content: center; color: white; font-weight: bold;"
+          ' font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">✓</div>'
+      )
+    else:
+      buton_html_w = (
+          f'<a href="?{param_adi}={hedef_adi}" target="_self"'
+          ' style="width: 42px; height: 42px; border-radius: 50%;'
+          ' background-color: rgba(255, 255, 255, 0.25); border: 2px solid'
+          ' rgba(255, 255, 255, 0.6); display: flex; align-items: center;'
+          ' justify-content: center; color: white; text-decoration: none;'
+          ' font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px'
+          f' rgba(0,0,0,0.15);">{buton_sembol}</a>'
+      )
 
     html_kodu_w = (
         f'<div style="background-color: {renk}; padding: 14px 18px;'
@@ -374,22 +496,15 @@ with tab_haftalik_hedefler:
         f"{prog_bar_html}"
         "</div>"
         "</div>"
-        '<div style="margin-left: 14px; flex-shrink: 0;">'
-        f'<a href="?{param_adi}={hedef_adi}" target="_self"'
-        ' style="width: 42px; height: 42px; border-radius: 50%;'
-        ' background-color: rgba(255, 255, 255, 0.25); border: 2px solid'
-        ' rgba(255, 255, 255, 0.6); display: flex; align-items: center;'
-        ' justify-content: center; color: white; text-decoration: none;'
-        ' font-weight: bold; font-size: 18px; box-shadow: 0 2px 6px'
-        f' rgba(0,0,0,0.15);">{buton_sembol}</a>'
-        "</div>"
+        f'<div style="margin-left: 14px; flex-shrink: 0;">{buton_html_w}</div>'
         "</div>"
     )
 
     st.markdown(html_kodu_w, unsafe_allow_html=True)
 
+
 # ==========================================
-# 3. SEKME: HEDEF YÖNETİMİ
+# 4. SEKME: HEDEF YÖNETİMİ
 # ==========================================
 with tab_hedef_yonetimi:
   st.header("Hedefleri ve Görsel Detayları Düzenle")
@@ -435,10 +550,10 @@ with tab_hedef_yonetimi:
           }
           hedefleri_kaydet(HEDEF_DOSYASI, st.session_state["custom_goals"])
 
-          if yeni_ad not in df.columns:
-            df[yeni_ad] = 0.0
-            st.session_state["data"] = df
-            verileri_kaydet(VERI_DOSYASI, df)
+          current_df = verileri_yukle(VERI_DOSYASI, ["Uyku"])
+          if yeni_ad not in current_df.columns:
+            current_df[yeni_ad] = 0.0
+            verileri_kaydet(VERI_DOSYASI, current_df)
 
           st.success(
               f"'{yeni_emoji} {yeni_ad}' başarıyla eklendi ve kaydedildi!"
@@ -503,10 +618,10 @@ with tab_hedef_yonetimi:
               HAFTALIK_HEDEF_DOSYASI, st.session_state["custom_haftalik_goals"]
           )
 
-          if yeni_w_ad not in df_h.columns:
-            df_h[yeni_w_ad] = 0.0
-            st.session_state["haftalik_data"] = df_h
-            verileri_kaydet(HAFTALIK_VERI_DOSYASI, df_h)
+          current_df_h = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
+          if yeni_w_ad not in current_df_h.columns:
+            current_df_h[yeni_w_ad] = 0.0
+            verileri_kaydet(HAFTALIK_VERI_DOSYASI, current_df_h)
 
           st.success(
               f"'{yeni_w_emoji} {yeni_w_ad}' başarıyla eklendi ve"
@@ -535,29 +650,34 @@ with tab_hedef_yonetimi:
         else:
           st.error("En az bir haftalık hedef kalmak zorunda.")
 
+
 # ==========================================
-# 4. SEKME: HAFTALIK GEÇMİŞ
+# 5. SEKME: HAFTALIK GEÇMİŞ
 # ==========================================
 with tab_haftalik_gecmis:
   st.header("Haftalık Geçmiş Tablosu")
-  df_w_tab = st.session_state["haftalik_data"]
-  if df_w_tab.empty or len(df_w_tab.columns) <= 1:
-    st.info("Henüz yeterli haftalık veri girilmedi.")
+  df_w_tab = verileri_yukle(HAFTALIK_VERI_DOSYASI, [])
+  if not df_w_tab.empty and len(df_w_tab.columns) > 1:
+    st.dataframe(df_w_tab, use_container_width=True)
   else:
-    st.dataframe(df_w_tab)
+    st.info("Henüz yeterli haftalık veri girilmedi.")
+
 
 # ==========================================
-# 5. SEKME: AYLIK İSTATİSTİKLER
+# 6. SEKME: AYLIK İSTATİSTİKLER
 # ==========================================
 with tab_aylik:
   st.header("Aylık Rapor")
-  df_m = st.session_state["data"]
+  df_m = verileri_yukle(VERI_DOSYASI, ["Uyku"])
   if not df_m.empty and "Uyku" in df_m.columns:
     ortalama_uyku = df_m["Uyku"].mean()
     st.metric("😴 Ortalama Uyku Süresi", f"{ortalama_uyku:.1f} Saat")
+  else:
+    st.info("Henüz yeterli veri bulunmuyor.")
+
 
 # ==========================================
-# 6. SEKME: YILLİK İSTATİSTİKLER
+# 7. SEKME: YILLIK İSTATİSTİKLER
 # ==========================================
 with tab_yillik:
   st.header("Yıllık Büyük Resim")
